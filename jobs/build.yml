@@ -1,0 +1,28 @@
+## build相关作业
+##
+
+.build:
+  stage: build
+  script: 
+    - |
+      ${BUILD_SHELL}
+  variables:
+    GIT_CHECKOUT: "true"
+  rules:
+    - if: " $RUN_PIPELINE_BUILD == 'no' "
+      when: never
+    - when: always
+
+
+## 构建镜像
+.build-docker:
+  stage: buildimage
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWD  $CI_REGISTRY
+    - docker build -t ${IMAGE_NAME} -f ${DOCKER_FILE_PATH} .
+    - docker push ${IMAGE_NAME} 
+    - docker rmi ${IMAGE_NAME} 
+  rules:
+    - if: " $RUN_BUILD_IMAGE == 'no' "
+      when: never
+    - when: always

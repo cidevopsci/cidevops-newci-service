@@ -1,0 +1,53 @@
+## 应用发布
+
+
+## 使用kubectl镜像发布
+.deploy_k8s:
+  stage: deploy
+  script:
+    - echo $KUBE_TOKEN
+    - kubectl config set-cluster my-cluster --server=${KUBE_URL} --certificate-authority="${KUBE_CA_PEM_FILE}"
+    - kubectl config set-credentials admin --token=${KUBE_TOKEN}
+    - ls -a 
+    - sed -i "s#__namespace__#${NAMESPACE}#g" ${DEPLOY_FILE}
+    - sed -i "s#__appname__#${APP_NAME}#g" ${DEPLOY_FILE}
+    - sed -i "s#__containerport__#${CONTAINER_PORT}#g" ${DEPLOY_FILE} 
+    - sed -i "s#__nodeport__#${NODE_PORT}#g" ${DEPLOY_FILE} 
+    - sed -i "s#__imagename__#${IMAGE_NAME}#g" ${DEPLOY_FILE} 
+    - sed -i "s#__CI_ENVIRONMENT_SLUG__#${CI_ENVIRONMENT_SLUG}#g" ${DEPLOY_FILE}
+    - sed -i "s#__CI_PROJECT_PATH_SLUG__#${CI_PROJECT_PATH_SLUG}#g" ${DEPLOY_FILE}
+    - sed -i "s#__ingressdomain__#${ENV_URL}#g" ${DEPLOY_FILE}
+    - cat ${DEPLOY_FILE}
+    - "kubectl create secret docker-registry ${APP_NAME} \
+            --docker-server=${CI_REGISTRY} \
+            --docker-username=$CI_REGISTRY_USER \
+            --docker-password=${CI_REGISTRY_PASSWD} \
+            --docker-email=test@test.com -n ${NAMESPACE} || echo 'secrets already exists'"
+    - kubectl apply -f ${DEPLOY_FILE}
+  rules:
+    - if: " $RUN_DEPLOY_K8S == 'no'"
+      when: never
+    - when: manual
+  environment:
+    name: "${ENV_NAME}"
+    url: "http://${ENV_NAME}.${CI_PROJECT_NAMESPACE}.${CI_PROJECT_NAME}.devops.com"
+
+  
+
+
+## 回滚
+.rollout_k8s:
+  stage: deploy
+  script:
+    - rm -rf $HOME/.kube
+    - kubectl config set-cluster my-cluster --server=${KUBE_URL} --certificate-authority="${KUBE_CA_PEM_FILE}"
+    - kubectl config set-credentials admin --token=${KUBE_TOKEN}
+    - kubectl rollout history deployment ${APP_NAME} -n ${NAMESPACE}
+    - kubectl rollout undo deployment ${APP_NAME} -n ${NAMESPACE}
+  rules:
+    - if: " $RUN_DEPLOY_K8S == 'no' "
+      when: never
+    - when: manual
+  environment:
+    name: "${ENV_NAME}"
+    action: stop

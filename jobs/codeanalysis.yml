@@ -1,0 +1,94 @@
+##代码扫描
+##
+##
+##
+
+.code_analysis:
+  variables:
+    GLOBAL_PROJECT_ARGS: "-Dsonar.projectKey=${CI_PROJECT_NAME} 
+                          -Dsonar.projectName=${CI_PROJECT_NAME} 
+                          -Dsonar.projectVersion=${CI_COMMIT_REF_NAME} 
+                          -Dsonar.projectDescription=${CI_PROJECT_TITLE}"
+    GLOBAL_SERVER_ARGS:  "-Dsonar.ws.timeout=30 
+                          -Dsonar.links.homepage=${CI_PROJECT_URL} 
+                          -Dsonar.host.url=${SONAR_SERVER_URL} 
+                          -Dsonar.login=${SONAR_SERVER_LOGIN}
+                          -Dsonar.sourceEncoding=UTF-8 "
+    GLOBAL_MR_ARGS: " -Dsonar.pullrequest.key=${CI_MERGE_REQUEST_IID} 
+                      -Dsonar.pullrequest.branch=${CI_MERGE_REQUEST_SOURCE_BRANCH_NAME} 
+                      -Dsonar.pullrequest.base=${CI_MERGE_REQUEST_TARGET_BRANCH_NAME} 
+                      -Dsonar.gitlab.ref_name=${CI_COMMIT_REF_NAME} 
+                      -Dsonar.gitlab.commit_sha=${CI_COMMIT_SHA} 
+                      -Dsonar.gitlab.project_id=${CI_PROJECT_PATH} 
+                      -Dsonar.pullrequest.gitlab.repositorySlug=${CI_PROJECT_ID} "
+    MULTI_BRANCH_ARGS: "-Dsonar.branch.name=${CI_COMMIT_REF_NAME}"
+  stage: code_analysis
+  script:
+    - echo ${GLOBAL_PROJECT_ARGS} ${GLOBAL_SERVER_ARGS} ${SONAR_SCAN_ARGS} ${GLOBAL_MR_ARGS}
+    #sonar-scanner $GLOBAL_PROJECT_ARGS $GLOBAL_SERVER_ARGS $SCAN_JAVA_ARGS
+    - |
+        if [ $CI_PIPELINE_SOURCE == 'merge_request_event' ] 
+        
+        then
+           echo "sonar-scanner ${GLOBAL_PROJECT_ARGS} ${GLOBAL_SERVER_ARGS} ${SONAR_SCAN_ARGS} " 
+           sonar-scanner ${GLOBAL_PROJECT_ARGS} ${GLOBAL_SERVER_ARGS} ${SONAR_SCAN_ARGS} 
+        else 
+           echo "sonar-scanner ${GLOBAL_PROJECT_ARGS} ${GLOBAL_SERVER_ARGS} ${SONAR_SCAN_ARGS} ${MULTI_BRANCH_ARGS}"
+           sonar-scanner ${GLOBAL_PROJECT_ARGS} ${GLOBAL_SERVER_ARGS} ${SONAR_SCAN_ARGS}  ${MULTI_BRANCH_ARGS}
+        fi 
+  rules:
+    - if: " $RUN_CODE_ANALYSIS == 'no' "
+      when: never
+    - when: always
+
+
+#### 获取代码扫描结果
+.get_analysis_result:
+  stage: get_analysis_result
+  script:
+    - |
+        SONAR_REPORT_URL=$(grep "ceTaskUrl" .scannerwork/report-task.txt  | awk -F = '{OFS="=";print $2,$3}')
+        echo ${SONAR_REPORT_URL}
+        
+        
+        for i in {1..10}
+        do
+          curl -k -u "${SONAR_SERVER_LOGIN}":"" ${SONAR_REPORT_URL}  -o sonar_result.txt -s
+          grep '"status":"SUCCESS"' sonar_result.txt  && SONAR_SCAN_RESULT='SUCCESS'
+        
+          if [ ${SONAR_SCAN_RESULT} == 'SUCCESS' ]
+            then
+              echo "${SONAR_SCAN_RESULT}"
+              SONAR_SCAN_RESULT=SUCCESS
+
+              curl -k -u "${SONAR_SERVER_LOGIN}":"" "${SONAR_SERVER_URL}/api/qualitygates/project_status?projectKey=$CI_PROJECT_NAME&branch=$CI_COMMIT_REF_NAME" -o result.txt  -s
+              echo "result info ---->>>>>"
+              cat result.txt
+              result=`cat result.txt | awk -F ':' '{print $3}' | awk -F '"' '{print$2}'`
+              
+              echo $result
+
+              if [ $result == 'ERROR' ]                 
+                then 
+                  echo "${result}"
+                  exit 122
+                  break;
+              else
+                  echo "success!"
+                  break;
+              fi
+            
+          else
+            SONAR_SCAN_RESULT='ERROR'
+            echo "第$i次获取结果信息，不是成功状态，睡眠10秒！"
+            cat sonar_result.txt
+            sleep 10
+          fi
+        done
+        
+  rules:
+    - if: " $RUN_CODE_ANALYSIS == 'no' "
+      when: never
+    - when: always
+
+        

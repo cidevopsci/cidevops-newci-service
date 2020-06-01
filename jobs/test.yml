@@ -1,0 +1,12 @@
+#单元测试
+.test:
+  stage: test
+  script:
+    - $TEST_SHELL
+  artifacts:
+    reports:
+      junit: ${JUNIT_REPORT_PATH}
+  rules:
+    - if: " $RUN_PIPELINE_TEST == 'no' "
+      when: never
+    - when: always

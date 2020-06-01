@@ -1,0 +1,19 @@
+## 制品库相关
+##
+
+.deploy-artifact:
+  stage: deploy-artifact
+  script:
+    - echo "curl -u${ARTIFACT_USER}:${ARTIFACT_PASSWD} -T ${ARTIFACT_PATH} $ARTIFACTORY_URL/$ARTIFACTORY_NAME/$TARGET_FILE_PATH/$TARGET_ARTIFACT_NAME"
+    - curl -u${ARTIFACT_USER}:${ARTIFACT_PASSWD} -T ${ARTIFACT_PATH} "$ARTIFACTORY_URL/$ARTIFACTORY_NAME/$TARGET_FILE_PATH/$TARGET_ARTIFACT_NAME"
+  rules:
+    - if: " $RUN_DEPLOY_ARTIFACTS == 'no' "
+      when: never
+    - when: always
+
+
+.down-artifact:
+  stage: down-artifact
+  script:
+    - curl -u${ARTIFACT_USER}:${ARTIFACT_PASSWD} -O "$ARTIFACTORY_URL/$ARTIFACTORY_NAME/$TARGET_FILE_PATH/$TARGET_ARTIFACT_NAME"
+    - ls
